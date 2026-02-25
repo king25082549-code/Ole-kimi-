@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+ type InstallmentRow = {
+   id: string
+   paid: boolean
+   dueDate: Date
+   amount: number
+ }
+
 // POST - บันทึกการชำระงวดผ่อน
 export async function POST(
   request: NextRequest,
@@ -10,6 +17,13 @@ export async function POST(
     const { id } = await params
     const body = await request.json()
     const { installmentId } = body
+
+    if (!installmentId || typeof installmentId !== 'string') {
+      return NextResponse.json(
+        { error: 'installmentId is required' },
+        { status: 400 }
+      )
+    }
     
     // อัพเดทงวดผ่อนว่าชำระแล้ว
     await prisma.productInstallment.update({
@@ -29,28 +43,36 @@ export async function POST(
     })
     
     if (customer) {
-      // คำนวณยอดค้างชำระ
-      const remainingInstallment = customer.installments
-        .filter(i => !i.paid || i.id === installmentId)
-        .filter(i => i.id !== installmentId)
-        .reduce((sum, i) => sum + i.amount, 0)
-      
-      // คำนวณกำไรปัจจุบัน
-      const paidAmount = customer.installments
-        .filter(i => i.paid || i.id === installmentId)
-        .reduce((sum, i) => sum + i.amount, 0)
-      const currentProfit = Math.min(paidAmount + customer.customerDownPayment, customer.totalProfit)
-      
-      // ตรวจสอบว่าผ่อนครบหรือยัง
-      const allPaid = customer.installments.every(i => i.paid || i.id === installmentId)
-      
+      const today = new Date()
+      const installments = customer.installments as unknown as InstallmentRow[]
+
+      const remainingInstallmentComputed = installments
+        .filter((i) => !i.paid)
+        .reduce((sum: number, i) => sum + i.amount, 0)
+
+      const paidAmount = installments
+        .filter((i) => i.paid)
+        .reduce((sum: number, i) => sum + i.amount, 0)
+
+      const currentProfit = paidAmount + customer.customerDownPayment - (customer.costPrice + customer.costBonus)
+
+      const hasOverdue = installments.some((i) => !i.paid && i.dueDate.getTime() < today.getTime())
+
+      const status = remainingInstallmentComputed === 0 && installments.length > 0
+        ? 'completed'
+        : hasOverdue
+          ? 'overdue'
+          : 'active'
+
+      const remainingInstallment = status === 'completed' ? 0 : remainingInstallmentComputed
+
       await prisma.customer.update({
         where: { id },
         data: {
           remainingInstallment,
           currentProfit,
-          status: allPaid ? 'completed' : 'active',
-          completedAt: allPaid ? new Date() : null
+          status,
+          completedAt: status === 'completed' ? new Date() : null
         }
       })
     }

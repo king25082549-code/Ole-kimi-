@@ -1,6 +1,6 @@
 'use client'
 
-import { TrendingUp, TrendingDown, Wallet, AlertCircle, Users, CheckCircle, Clock, CreditCard, PiggyBank } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, AlertCircle, Users, CheckCircle, Clock, CreditCard, PiggyBank, HelpCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -77,7 +77,7 @@ export function Dashboard({ summary, onViewCustomer, loading }: DashboardProps) 
       bgColor: 'bg-blue-100'
     },
     {
-      title: 'ลูกค้ายังไม่ชำระ',
+      title: 'ยอดคงเหลือลูกค้าชำระ',
       value: formatCurrency(summary.totalRemaining),
       icon: AlertCircle,
       color: 'text-orange-600',
@@ -147,6 +147,17 @@ export function Dashboard({ summary, onViewCustomer, loading }: DashboardProps) 
                   <div className="text-center lg:text-left">
                     <p className="text-xs lg:text-sm font-medium text-gray-500">{stat.title}</p>
                     <p className={`text-xl lg:text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
+                    {/* เพิ่มคำอธิบาย */}
+                    {stat.title === 'กำไรขาดทุนปัจจุบัน' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ยอดที่ลูกค้าจ่ายมาแล้ว - ต้นทุนทั้งหมด
+                      </p>
+                    )}
+                    {stat.title === 'กำไรขาดทุนทั้งหมด' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ราคาขายทั้งหมด - ต้นทุนทั้งหมด
+                      </p>
+                    )}
                   </div>
                   <div className="hidden lg:block bg-gray-100 p-3 rounded-full">
                     <Icon className={`w-6 h-6 ${stat.color}`} />
@@ -185,6 +196,112 @@ export function Dashboard({ summary, onViewCustomer, loading }: DashboardProps) 
           </CardContent>
         </Card>
       </div>
+
+      {/* อธิบายการคำนวณกำไร */}
+      <Card className="bg-gray-50">
+        <CardHeader className="p-4 lg:p-6">
+          <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
+            <HelpCircle className="w-4 h-4 lg:w-5 lg:h-5 text-gray-500" />
+            อธิบายการคำนวณกำไร
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-700">📊 กำไรขาดทุนปัจจุบัน ({formatCurrency(summary.currentProfit)})</h4>
+              <p className="text-gray-600">คำนวณจาก: ยอดที่ลูกค้าจ่ายมาแล้วทั้งหมด - ต้นทุนทั้งหมด</p>
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>• ยอดจ่ายมาแล้ว: {formatCurrency(summary.totalCollected)}</p>
+                <p>• ต้นทุนทั้งหมด: {formatCurrency(summary.totalCost)}</p>
+                <p>• ผลลัพธ์: {formatCurrency(summary.totalCollected)} - {formatCurrency(summary.totalCost)} = {formatCurrency(summary.currentProfit)}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-700">📈 กำไรขาดทุนทั้งหมด ({formatCurrency(summary.totalProfit)})</h4>
+              <p className="text-gray-600">คำนวณจาก: ราคาขายทั้งหมด - ต้นทุนทั้งหมด</p>
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>• ราคาขายทั้งหมด: {formatCurrency(summary.totalSales)}</p>
+                <p>• ต้นทุนทั้งหมด: {formatCurrency(summary.totalCost)}</p>
+                <p>• ผลลัพธ์: {formatCurrency(summary.totalSales)} - {formatCurrency(summary.totalCost)} = {formatCurrency(summary.totalProfit)}</p>
+              </div>
+            </div>
+          </div>
+          {summary.currentProfit < 0 && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">
+                <strong>หมายเหตุ:</strong> กำไรปัจจุบันติดลบ {formatCurrency(Math.abs(summary.currentProfit))} 
+                เพราะลูกค้ายังจ่ายเงินไม่ถึงต้นทุนที่ซื้อสินค้ามา 
+                (ต้นทุน {formatCurrency(summary.totalCost)} แต่ได้รับมาแค่ {formatCurrency(summary.totalCollected)})
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* รายละเอียดลูกค้าแต่ละคน */}
+      <Card>
+        <CardHeader className="p-4 lg:p-6">
+          <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
+            <Users className="w-4 h-4 lg:w-5 lg:h-5 text-blue-500" />
+            รายละเอียดลูกค้าทั้งหมด
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
+          <div className="space-y-3">
+            {(!summary.allCustomers || summary.allCustomers.length === 0) ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm lg:text-base">ยังไม่มีข้อมูลลูกค้า</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {summary.allCustomers.map((customer) => {
+                  const paidAmount = customer.installments
+                    .filter(i => i.paid)
+                    .reduce((sum, i) => sum + i.amount, 0) + customer.customerDownPayment;
+                  const totalCost = customer.costPrice + customer.costBonus;
+                  
+                  return (
+                    <div key={customer.id} className="p-4 bg-gray-50 rounded-lg">
+                      <h4 className="font-semibold text-gray-900 mb-2">
+                        {customer.name} 
+                        <span className={`ml-2 text-xs px-2 py-1 rounded ${
+                          customer.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          customer.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {customer.status === 'completed' ? 'ปิดการขาย' :
+                           customer.status === 'overdue' ? 'เลยกำหนด' : 'กำลังผ่อน'}
+                        </span>
+                      </h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">ชำระแล้ว:</span>
+                          <span className="font-medium text-blue-600">{formatCurrency(paidAmount)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">ต้นทุนรวม:</span>
+                          <span className="font-medium text-orange-600">{formatCurrency(totalCost)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">คงเหลือชำระ:</span>
+                          <span className={`font-medium ${
+                            customer.remainingInstallment === 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {formatCurrency(customer.remainingInstallment)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {customer.productType} {customer.productModel}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ลูกค้าที่จะถึงนัดชำระ */}
       <Card>

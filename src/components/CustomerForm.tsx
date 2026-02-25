@@ -58,6 +58,7 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
   const [sellingPrice, setSellingPrice] = useState('')
   const [customerDownPayment, setCustomerDownPayment] = useState('')
   const [downPaymentOption, setDownPaymentOption] = useState<'full' | 'installment'>('full')
+  const [downPaymentMonths, setDownPaymentMonths] = useState(1)
   
   // การผ่อน
   const [installmentMonths, setInstallmentMonths] = useState('')
@@ -80,6 +81,7 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
       setSellingPrice(editingCustomer.sellingPrice.toString())
       setCustomerDownPayment(editingCustomer.customerDownPayment.toString())
       setDownPaymentOption(editingCustomer.downPaymentInstallment ? 'installment' : 'full')
+      setDownPaymentMonths(editingCustomer.downPaymentMonths || 1)
       setInstallmentMonths(editingCustomer.installmentMonths.toString())
       setPaymentDueDate(editingCustomer.paymentDueDate.toString())
       setInstallments(editingCustomer.installments || [])
@@ -196,11 +198,11 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
   const handleSave = () => {
     // คำนวณยอดผ่อนดาวน์
     const downPay = parseFloat(customerDownPayment) || 0
-    let downPaymentMonths = 0
+    let calculatedDownPaymentMonths = 0
     let downPaymentMonthly = 0
     
     if (downPaymentOption === 'installment' && downPay > 0) {
-      downPaymentMonths = Math.min(3, Math.ceil(downPay / 1000))
+      calculatedDownPaymentMonths = downPaymentMonths
       downPaymentMonthly = Math.ceil(downPay / downPaymentMonths)
     }
     
@@ -230,7 +232,7 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
       sellingPrice: parseFloat(sellingPrice) || 0,
       customerDownPayment: downPay,
       downPaymentInstallment: downPaymentOption === 'installment',
-      downPaymentMonths: downPaymentOption === 'installment' ? downPaymentMonths : undefined,
+      downPaymentMonths: downPaymentOption === 'installment' ? calculatedDownPaymentMonths : undefined,
       downPaymentMonthly: downPaymentOption === 'installment' ? downPaymentMonthly : undefined,
       remainingInstallment: installments.filter(i => !i.paid).reduce((sum, i) => sum + i.amount, 0),
       installmentMonths: parseInt(installmentMonths) || 0,
@@ -249,8 +251,8 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
     onSave(customerData)
   }
 
-  // ตรวจสอบความถูกต้อง
-  const isValid = name && phone && productModel && sellingPrice && installments.length > 0
+  // ตรวจสอบความถูกต้อง - แก้ไขให้บันทึกได้แม้ข้อมูลไม่ครบ
+  const isValid = name && phone && productModel && sellingPrice
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
@@ -513,11 +515,40 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
                   </RadioGroup>
                   
                   {downPaymentOption === 'installment' && (
-                    <div className="p-3 bg-blue-50 rounded-lg">
-                      <p className="text-sm text-blue-700">
-                        ผ่อนดาวน์ {Math.min(3, Math.ceil(parseFloat(customerDownPayment) / 1000))} งวด
-                        {' '}งวดละ {formatCurrency(Math.ceil(parseFloat(customerDownPayment) / Math.min(3, Math.ceil(parseFloat(customerDownPayment) / 1000))))}
-                      </p>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="downPaymentMonths">จำนวนงวดผ่อนดาวน์</Label>
+                          <Select
+                            value={downPaymentMonths.toString()}
+                            onValueChange={(v) => setDownPaymentMonths(parseInt(v))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1 งวด</SelectItem>
+                              <SelectItem value="2">2 งวด</SelectItem>
+                              <SelectItem value="3">3 งวด</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>งวดละ (บาท)</Label>
+                          <Input
+                            type="number"
+                            value={Math.ceil(parseFloat(customerDownPayment) / downPaymentMonths)}
+                            disabled
+                            className="bg-gray-100"
+                          />
+                        </div>
+                      </div>
+                      <div className="p-3 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-blue-700">
+                          ผ่อนดาวน์ {downPaymentMonths} งวด
+                          {' '}งวดละ {formatCurrency(Math.ceil(parseFloat(customerDownPayment) / downPaymentMonths))}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

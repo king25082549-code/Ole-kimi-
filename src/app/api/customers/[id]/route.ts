@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+ function toNumber(value: unknown, fallback = 0): number {
+   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+   return Number.isFinite(n) ? n : fallback
+ }
+
+ function toInt(value: unknown, fallback = 0): number {
+   const n = toNumber(value, fallback)
+   return Number.isFinite(n) ? Math.trunc(n) : fallback
+ }
+
+ function isValidDateString(value: unknown): value is string {
+   return typeof value === 'string' && !Number.isNaN(new Date(value).getTime())
+ }
+
+ type NormalizedInstallment = {
+   installmentNumber: number
+   dueDate: Date
+   amount: number
+   paid: boolean
+   paidDate?: Date
+ }
+
 // GET - ดึงข้อมูลลูกค้ารายบุคคล
 export async function GET(
   request: NextRequest,
@@ -51,13 +73,50 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    
+
+    const sellingPrice = toNumber(body.sellingPrice, 0)
+    const costPrice = toNumber(body.costPrice, 0)
+    const costBonus = toNumber(body.costBonus, 0)
+    const customerDownPayment = toNumber(body.customerDownPayment, 0)
+
     // คำนวณกำไรทั้งหมด
-    const totalProfit = (body.sellingPrice || 0) - (body.costPrice || 0) - (body.costBonus || 0)
-    
-    // คำนวณกำไรปัจจุบัน (เงินที่เก็บได้แล้ว)
-    const paidInstallments = body.installments?.filter((i: any) => i.paid).reduce((sum: number, i: any) => sum + i.amount, 0) || 0
-    const currentProfit = Math.min(paidInstallments + (body.customerDownPayment || 0), totalProfit)
+    const totalProfit = sellingPrice - costPrice - costBonus
+
+    const installmentsInput = Array.isArray(body.installments) ? body.installments : []
+    const installments: NormalizedInstallment[] = installmentsInput
+      .filter((inst: any) => typeof inst?.installmentNumber === 'number' || typeof inst?.installmentNumber === 'string')
+      .filter((inst: any) => isValidDateString(inst?.dueDate))
+      .map((inst: any) => ({
+        installmentNumber: toInt(inst.installmentNumber, 0),
+        dueDate: new Date(inst.dueDate),
+        amount: toNumber(inst.amount, 0),
+        paid: !!inst.paid,
+        paidDate: inst.paidDate && isValidDateString(inst.paidDate) ? new Date(inst.paidDate) : undefined
+      }))
+      .filter((inst: any) => inst.installmentNumber > 0)
+
+    const remainingInstallmentComputed = installments
+      .filter((i) => !i.paid)
+      .reduce((sum: number, i) => sum + i.amount, 0)
+    const paidInstallments = installments
+      .filter((i) => i.paid)
+      .reduce((sum: number, i) => sum + i.amount, 0)
+    const currentProfit = paidInstallments + customerDownPayment - (costPrice + costBonus)
+
+    const today = new Date()
+    const hasOverdue = installments.some((i) => !i.paid && i.dueDate.getTime() < today.getTime())
+
+    let status: 'active' | 'completed' | 'overdue' = 'active'
+    let completedAt: Date | null = null
+    if (body.status === 'completed') {
+      status = 'completed'
+      completedAt = body.completedAt && isValidDateString(body.completedAt) ? new Date(body.completedAt) : new Date()
+    } else {
+      status = remainingInstallmentComputed === 0 && installments.length > 0 ? 'completed' : hasOverdue ? 'overdue' : 'active'
+      completedAt = status === 'completed' ? new Date() : null
+    }
+
+    const remainingInstallment = status === 'completed' ? 0 : remainingInstallmentComputed
     
     // ลบ installments และ creditCards เก่าก่อน แล้วสร้างใหม่
     await prisma.productInstallment.deleteMany({
@@ -86,45 +145,45 @@ export async function PUT(
         productTypeOther: body.productTypeOther,
         productModel: body.productModel,
         serialNumber: body.serialNumber,
-        costPrice: body.costPrice || 0,
-        costBonus: body.costBonus || 0,
-        downPaymentForPurchase: body.downPaymentForPurchase || 0,
-        sellingPrice: body.sellingPrice || 0,
-        customerDownPayment: body.customerDownPayment || 0,
+        costPrice,
+        costBonus,
+        downPaymentForPurchase: toNumber(body.downPaymentForPurchase, 0),
+        sellingPrice,
+        customerDownPayment,
         downPaymentInstallment: body.downPaymentInstallment || false,
-        downPaymentMonths: body.downPaymentMonths,
-        downPaymentMonthly: body.downPaymentMonthly,
-        installmentMonths: body.installmentMonths || 0,
-        monthlyPayment: body.monthlyPayment || 0,
-        paymentDueDate: body.paymentDueDate || 1,
-        remainingInstallment: body.remainingInstallment || 0,
+        downPaymentMonths: body.downPaymentMonths != null ? toInt(body.downPaymentMonths) : undefined,
+        downPaymentMonthly: body.downPaymentMonthly != null ? toNumber(body.downPaymentMonthly) : undefined,
+        installmentMonths: toInt(body.installmentMonths, 0),
+        monthlyPayment: toNumber(body.monthlyPayment, 0),
+        paymentDueDate: toInt(body.paymentDueDate, 1) || 1,
+        remainingInstallment,
         totalProfit: totalProfit,
         currentProfit: currentProfit,
-        status: body.status || 'active',
-        completedAt: body.completedAt ? new Date(body.completedAt) : null,
+        status,
+        completedAt,
         installments: {
-          create: body.installments?.map((inst: any) => ({
+          create: installments.map((inst) => ({
             installmentNumber: inst.installmentNumber,
-            dueDate: new Date(inst.dueDate),
+            dueDate: inst.dueDate,
             amount: inst.amount,
-            paid: inst.paid || false,
-            paidDate: inst.paidDate ? new Date(inst.paidDate) : null
-          })) || []
+            paid: inst.paid,
+            paidDate: inst.paidDate
+          }))
         },
         creditCards: {
           create: body.creditCards?.map((card: any) => ({
             creditCardId: card.creditCardId,
-            amount: card.amount,
-            installments: card.installments,
-            monthlyPayment: card.monthlyPayment,
-            remainingAmount: card.remainingAmount,
+            amount: toNumber(card.amount, 0),
+            installments: toInt(card.installments, 0),
+            monthlyPayment: toNumber(card.monthlyPayment, 0),
+            remainingAmount: toNumber(card.remainingAmount, 0),
             payments: {
               create: card.payments?.map((payment: any) => ({
-                installmentNumber: payment.installmentNumber,
+                installmentNumber: toInt(payment.installmentNumber, 0),
                 dueDate: new Date(payment.dueDate),
-                amount: payment.amount,
-                paid: payment.paid || false,
-                paidDate: payment.paidDate ? new Date(payment.paidDate) : null
+                amount: toNumber(payment.amount, 0),
+                paid: !!payment.paid,
+                paidDate: payment.paidDate && isValidDateString(payment.paidDate) ? new Date(payment.paidDate) : undefined
               })) || []
             }
           })) || []

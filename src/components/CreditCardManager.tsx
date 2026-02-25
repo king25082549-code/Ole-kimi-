@@ -77,10 +77,13 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
   const getUpcomingCards = () => {
     const today = new Date()
     const currentDay = today.getDate()
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
     
     return creditCards.filter(card => {
-      const daysUntil = card.dueDate - currentDay
-      return daysUntil >= 0 && daysUntil <= 3
+      const daysUntil = card.dueDate >= currentDay
+        ? card.dueDate - currentDay
+        : (daysInMonth - currentDay) + card.dueDate
+      return daysUntil >= 0 && daysUntil <= 7
     })
   }
 
@@ -118,7 +121,11 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
             <div className="space-y-2">
               {upcomingCards.map(card => {
                 const today = new Date()
-                const daysUntil = card.dueDate - today.getDate()
+                const currentDay = today.getDate()
+                const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                const daysUntil = card.dueDate >= currentDay
+                  ? card.dueDate - currentDay
+                  : (daysInMonth - currentDay) + card.dueDate
                 
                 return (
                   <div key={card.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
@@ -126,6 +133,9 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                       <p className="font-medium text-orange-900">{card.name}</p>
                       <p className="text-sm text-orange-700">
                         ครบกำหนดวันที่ {card.dueDate} ของทุกเดือน
+                      </p>
+                      <p className="text-xs text-orange-700 mt-1">
+                        ต้องจ่ายเดือนนี้: {formatCurrency(card.monthlyDueThisMonth || 0)}
                       </p>
                     </div>
                     <Badge variant={daysUntil === 0 ? 'destructive' : 'default'}>
@@ -200,7 +210,21 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
             <CreditCardIcon className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-medium text-gray-900">ยังไม่มีบัตรเครดิต</h3>
-          <p className="text-gray-500 mt-1">กด "เพิ่มบัตรเครดิต" เพื่อเริ่มต้น</p>
+          <p className="text-gray-500 mt-1">เพิ่มบัตรเครดิตเพื่อใช้ในการรูดซื้อสินค้าให้ลูกค้า</p>
+          <div className="mt-6 space-y-3">
+            <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
+              <p className="font-medium mb-2">💡 ทำไมต้องเพิ่มบัตรเครดิต?</p>
+              <ul className="text-left space-y-1">
+                <li>• ใช้รูดซื้อสินค้าแทนลูกค้า</li>
+                <li>• ติดตามยอดคงเหลือและวันครบกำหนด</li>
+                <li>• จัดการการผ่อนชำระบัตรอย่างเป็นระบบ</li>
+              </ul>
+            </div>
+            <Button onClick={() => setIsAdding(true)} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              เพิ่มบัตรเครดิตแรก
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -238,6 +262,28 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">ครบกำหนด:</span>
                       <span className="font-medium">วันที่ {card.dueDate}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">วงเงินบัตร:</span>
+                      <span className="font-medium text-green-600">{formatCurrency(card.limit)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">ยอดใช้รวม:</span>
+                      <span className="font-medium text-blue-600">{formatCurrency(card.totalUsed || 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">ต้องจ่ายเดือนนี้:</span>
+                      <span className="font-medium text-purple-600">{formatCurrency(card.monthlyDueThisMonth || 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">ยอดคงเหลือ:</span>
+                      <span className="font-medium text-orange-600">{formatCurrency(card.availableBalance || 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">สัดส่วนการใช้:</span>
+                      <span className={`font-medium ${(card.utilizationRate || 0) > 80 ? 'text-red-600' : (card.utilizationRate || 0) > 50 ? 'text-orange-600' : 'text-green-600'}`}>
+                        {(card.utilizationRate || 0).toFixed(1)}%
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">การใช้งาน:</span>
@@ -348,14 +394,58 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
           <ScrollArea className="max-h-[calc(90vh-80px)]">
             {viewCard && (
               <div className="p-4 lg:p-6 space-y-4">
+                {/* ข้อมูลพื้นฐานบัตร */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">วงเงินบัตร</p>
-                    <p className="font-medium">{formatCurrency(viewCard.limit)}</p>
+                    <p className="font-medium text-green-600">{formatCurrency(viewCard.limit)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">วันครบกำหนดชำระ</p>
                     <p className="font-medium">วันที่ {viewCard.dueDate} ของทุกเดือน</p>
+                  </div>
+                </div>
+                
+                {/* สรุปการเงิน */}
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-3">สรุปการเงิน</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-600">ยอดใช้รวม</p>
+                      <p className="text-xl font-bold text-blue-800">{formatCurrency(viewCard.totalUsed || 0)}</p>
+                    </div>
+                    <div className="p-3 bg-orange-50 rounded-lg">
+                      <p className="text-sm text-orange-600">ยอดคงเหลือ</p>
+                      <p className="text-xl font-bold text-orange-800">{formatCurrency(viewCard.availableBalance || 0)}</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg">
+                      <p className="text-sm text-green-600">สัดส่วนการใช้</p>
+                      <p className={`text-xl font-bold ${(viewCard.utilizationRate || 0) > 80 ? 'text-red-800' : (viewCard.utilizationRate || 0) > 50 ? 'text-orange-800' : 'text-green-800'}`}>
+                        {(viewCard.utilizationRate || 0).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 p-3 bg-purple-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-purple-600">ต้องจ่ายเดือนนี้ (งวดผ่อน 0%)</p>
+                      <p className="text-lg font-bold text-purple-800">{formatCurrency(viewCard.monthlyDueThisMonth || 0)}</p>
+                    </div>
+                    <p className="text-xs text-purple-600 mt-1">รวมเฉพาะงวดที่ถึงกำหนดในเดือนปัจจุบันและยังไม่จ่าย</p>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="mt-4">
+                    <div className="flex justify-between text-sm text-gray-600 mb-1">
+                      <span>การใช้งานวงเงิน</span>
+                      <span>{formatCurrency(viewCard.totalUsed || 0)} / {formatCurrency(viewCard.limit)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${(viewCard.utilizationRate || 0) > 80 ? 'bg-red-500' : (viewCard.utilizationRate || 0) > 50 ? 'bg-orange-500' : 'bg-green-500'}`}
+                        style={{ width: `${Math.min(viewCard.utilizationRate || 0, 100)}%` }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
                 

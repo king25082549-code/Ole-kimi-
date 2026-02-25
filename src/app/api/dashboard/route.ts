@@ -38,17 +38,26 @@ export async function GET() {
     // กำไรขาดทุนทั้งหมด
     const totalProfit = customers.reduce((sum, c) => sum + c.totalProfit, 0)
     
-    // กำไรขาดทุนปัจจุบัน
-    const currentProfit = customers.reduce((sum, c) => sum + c.currentProfit, 0)
+    // กำไรขาดทุนปัจจุบัน - คำนวณใหม่โดยตรง
+    const currentProfit = customers.reduce((sum, c) => {
+      const paidInstallments = c.installments.filter(i => i.paid).reduce((s, i) => s + i.amount, 0)
+      const totalPaid = paidInstallments + c.customerDownPayment
+      const totalCost = c.costPrice + c.costBonus
+      return sum + (totalPaid - totalCost)
+    }, 0)
     
     // ยอดผ่อนบัตรเครดิตค้างชำระ
     const creditCardRemaining = customers.reduce((sum, c) => {
       return sum + c.creditCards.reduce((cardSum, card) => cardSum + card.remainingAmount, 0)
     }, 0)
     
-    // ลูกค้าที่จะถึงนัดชำระ (7 วัน)
+    // ลูกค้าที่จะถึงนัดชำระ (7 วัน) - รวมทั้ง active และ overdue ที่ยังมีงวดที่ต้องจ่าย
     const today = new Date()
-    const upcomingPayments = activeCustomers.filter(c => {
+    const customersWithPayments = customers.filter(c => 
+      (c.status === 'active' || c.status === 'overdue') && 
+      c.installments.some(i => !i.paid)
+    )
+    const upcomingPayments = customersWithPayments.filter(c => {
       const nextPayment = c.installments.find(i => !i.paid)
       if (!nextPayment) return false
       const dueDate = new Date(nextPayment.dueDate)
@@ -72,7 +81,21 @@ export async function GET() {
       upcomingPayments,
       activeCustomers: activeCustomers.length,
       completedCustomers: completedCustomers.length,
-      overdueCustomers: customers.filter(c => c.status === 'overdue').length
+      overdueCustomers: customers.filter(c => c.status === 'overdue').length,
+      allCustomers: customers.map(c => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        productType: c.productType,
+        productModel: c.productModel,
+        sellingPrice: c.sellingPrice,
+        costPrice: c.costPrice,
+        costBonus: c.costBonus,
+        customerDownPayment: c.customerDownPayment,
+        remainingInstallment: c.remainingInstallment,
+        currentProfit: c.currentProfit,
+        installments: c.installments
+      }))
     })
   } catch (error) {
     console.error('Error fetching dashboard data:', error)

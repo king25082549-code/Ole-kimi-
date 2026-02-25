@@ -46,15 +46,19 @@ function getDaysUntilDue(dueDate: string): number {
 
 export function CustomerList({ customers, onAddNew, onEdit, onDelete, onComplete, onPayInstallment, loading }: CustomerListProps) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'overdue'>('all')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
 
-  const filteredCustomers = customers.filter(c => 
-    c.status === 'active' &&
-    (c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     c.phone.includes(searchTerm) ||
-     c.productModel.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredCustomers = customers.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         c.phone.includes(searchTerm) ||
+                         c.productModel.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesStatus = statusFilter === 'all' || c.status === statusFilter
+    
+    return matchesSearch && matchesStatus
+  })
 
   const handleView = (customer: Customer) => {
     setSelectedCustomer(customer)
@@ -87,15 +91,50 @@ export function CustomerList({ customers, onAddNew, onEdit, onDelete, onComplete
         </Button>
       </div>
 
-      {/* ค้นหา */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input
-          placeholder="ค้นหาลูกค้า ชื่อ เบอร์โทร หรือรุ่น..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* ตัวกรองสถานะและค้นหา */}
+      <div className="space-y-3">
+        {/* ตัวกรองสถานะ */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={statusFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('all')}
+          >
+            ทั้งหมด ({customers.length})
+          </Button>
+          <Button
+            variant={statusFilter === 'active' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('active')}
+          >
+            กำลังผ่อน ({customers.filter(c => c.status === 'active').length})
+          </Button>
+          <Button
+            variant={statusFilter === 'completed' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('completed')}
+          >
+            ปิดการขาย ({customers.filter(c => c.status === 'completed').length})
+          </Button>
+          <Button
+            variant={statusFilter === 'overdue' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('overdue')}
+          >
+            เลยกำหนด ({customers.filter(c => c.status === 'overdue').length})
+          </Button>
+        </div>
+
+        {/* ค้นหา */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            placeholder="ค้นหาลูกค้า ชื่อ เบอร์โทร หรือรุ่น..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </div>
 
       {filteredCustomers.length === 0 ? (
@@ -129,42 +168,39 @@ export function CustomerList({ customers, onAddNew, onEdit, onDelete, onComplete
                         </p>
                       </div>
                     </div>
-                    <Badge variant={isOverdue ? 'destructive' : 'default'} className="flex-shrink-0 ml-2">
-                      {isOverdue ? 'เลยกำหนด' : 'กำลังผ่อน'}
+                    <Badge 
+                      variant={
+                        customer.status === 'completed' ? 'secondary' :
+                        isOverdue ? 'destructive' : 'default'
+                      } 
+                      className={`flex-shrink-0 ml-2 ${
+                        customer.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        isOverdue ? 'bg-red-500 text-white' : ''
+                      }`}
+                    >
+                      {customer.status === 'completed' ? 'ปิดการขาย' :
+                       isOverdue ? 'เลยกำหนด' : 'กำลังผ่อน'}
                     </Badge>
                   </div>
                   
                   <div className="space-y-1.5 mb-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-600 flex-shrink-0">สินค้า:</span>
-                      <span className="font-medium truncate">{customer.productType} {customer.productModel}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
                       <span className="text-gray-600 flex-shrink-0">ราคาขาย:</span>
                       <span className="font-medium text-green-600">{formatCurrency(customer.sellingPrice)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-600 flex-shrink-0">ค้างชำระ:</span>
-                      <span className="font-medium text-orange-600">{formatCurrency(customer.remainingInstallment)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600 flex-shrink-0">กำไรที่จะได้:</span>
-                      <span className="font-medium text-blue-600">{formatCurrency(customer.totalProfit)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600 flex-shrink-0">กำไรปัจจุบัน:</span>
-                      <span className={`font-medium ${customer.currentProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(customer.currentProfit)}
+                      <span className="text-gray-600 flex-shrink-0">ยอดผ่อนมาแล้ว:</span>
+                      <span className="font-medium text-blue-600">
+                        {formatCurrency(
+                          (customer.installments?.filter(i => i.paid).reduce((sum, i) => sum + i.amount, 0) || 0) + 
+                          customer.customerDownPayment
+                        )}
                       </span>
                     </div>
-                    {nextPayment && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600 flex-shrink-0">งวดถัดไป:</span>
-                        <span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-blue-600'}`}>
-                          {formatCurrency(nextPayment.amount)}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600 flex-shrink-0">เหลือลูกค้าต้องชำระ:</span>
+                      <span className="font-medium text-orange-600">{formatCurrency(customer.remainingInstallment)}</span>
+                    </div>
                   </div>
                   
                   <div className="flex gap-2">
@@ -244,7 +280,25 @@ export function CustomerList({ customers, onAddNew, onEdit, onDelete, onComplete
 
                 {/* กำไร */}
                 <div className="border-t pt-4">
-                  <h4 className="font-semibold mb-3">สรุปกำไร</h4>
+                  <h4 className="font-semibold mb-3">สรุปการเงิน</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div className="p-3 bg-purple-50 rounded-lg">
+                      <p className="text-sm text-purple-600">ยอดที่ชำระมาแล้วทั้งหมด</p>
+                      <p className="text-xl font-bold text-purple-800">
+                        {formatCurrency(
+                          (selectedCustomer.installments?.filter(i => i.paid).reduce((sum, i) => sum + i.amount, 0) || 0) + 
+                          selectedCustomer.customerDownPayment
+                        )}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-orange-50 rounded-lg">
+                      <p className="text-sm text-orange-600">ต้นทุนรวม (สินค้า + ของแถม)</p>
+                      <p className="text-xl font-bold text-orange-800">
+                        {formatCurrency(selectedCustomer.costPrice + selectedCustomer.costBonus)}
+                      </p>
+                    </div>
+                  </div>
+                  
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="p-3 bg-blue-50 rounded-lg">
                       <p className="text-sm text-blue-600">กำไรที่จะได้ทั้งหมด</p>

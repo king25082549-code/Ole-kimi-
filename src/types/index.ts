@@ -59,6 +59,12 @@ export interface CreditCard {
   limit: number;
   dueDate: number;
   usages?: CreditCardUsage[];
+  totalUsed?: number;
+  totalRemaining?: number;
+  availableBalance?: number;
+  utilizationRate?: number;
+  monthlyDueThisMonth?: number;
+  dueWithin7Days?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,4 +130,24 @@ export interface DashboardSummary {
   totalProfit: number;
   currentProfit: number;
   creditCardRemaining: number;
+  allCustomers?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    productType: string;
+    productModel: string;
+    sellingPrice: number;
+    costPrice: number;
+    costBonus: number;
+    customerDownPayment: number;
+    remainingInstallment: number;
+    currentProfit: number;
+    installments: Array<{
+      installmentNumber: number;
+      dueDate: string;
+      amount: number;
+      paid: boolean;
+      paidDate?: string;
+    }>;
+  }>;
 }

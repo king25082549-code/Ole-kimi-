@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+ function toNumber(value: unknown, fallback = 0): number {
+   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+   return Number.isFinite(n) ? n : fallback
+ }
+
+ function toInt(value: unknown, fallback = 0): number {
+   const n = toNumber(value, fallback)
+   return Number.isFinite(n) ? Math.trunc(n) : fallback
+ }
+
+ function isValidDateString(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(new Date(value).getTime())
+}
+
+ type NormalizedInstallment = {
+   installmentNumber: number
+   dueDate: Date
+   amount: number
+   paid: boolean
+   paidDate?: Date
+ }
+
 // GET - ดึงข้อมูลลูกค้าทั้งหมด
 export async function GET(request: NextRequest) {
   try {
@@ -41,10 +63,37 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
+    const sellingPrice = toNumber(body.sellingPrice, 0)
+    const costPrice = toNumber(body.costPrice, 0)
+    const costBonus = toNumber(body.costBonus, 0)
+    const customerDownPayment = toNumber(body.customerDownPayment, 0)
+
     // คำนวณกำไรทั้งหมด
-    const totalProfit = body.sellingPrice - body.costPrice - (body.costBonus || 0)
-    
+    const totalProfit = sellingPrice - costPrice - costBonus
+
+    const installmentsInput = Array.isArray(body.installments) ? body.installments : []
+    const installments: NormalizedInstallment[] = installmentsInput
+      .filter((inst: any) => typeof inst?.installmentNumber === 'number' || typeof inst?.installmentNumber === 'string')
+      .filter((inst: any) => isValidDateString(inst?.dueDate))
+      .map((inst: any) => ({
+        installmentNumber: toInt(inst.installmentNumber, 0),
+        dueDate: new Date(inst.dueDate),
+        amount: toNumber(inst.amount, 0),
+        paid: !!inst.paid,
+        paidDate: inst.paidDate && isValidDateString(inst.paidDate) ? new Date(inst.paidDate) : undefined
+      }))
+      .filter((inst: any) => inst.installmentNumber > 0)
+
+    const remainingInstallment = installments.filter(i => !i.paid).reduce((sum: number, i) => sum + i.amount, 0)
+    const paidInstallments = installments.filter(i => i.paid).reduce((sum: number, i) => sum + i.amount, 0)
+    const currentProfit = paidInstallments + customerDownPayment - (costPrice + costBonus)
+
+    const today = new Date()
+    const hasOverdue = installments.some((i) => !i.paid && i.dueDate.getTime() < today.getTime())
+    const status = remainingInstallment === 0 && installments.length > 0 ? 'completed' : hasOverdue ? 'overdue' : 'active'
+    const completedAt = status === 'completed' ? new Date() : null
+
     const customer = await prisma.customer.create({
       data: {
         name: body.name,
@@ -54,42 +103,45 @@ export async function POST(request: NextRequest) {
         productTypeOther: body.productTypeOther,
         productModel: body.productModel,
         serialNumber: body.serialNumber,
-        costPrice: body.costPrice || 0,
-        costBonus: body.costBonus || 0,
-        downPaymentForPurchase: body.downPaymentForPurchase || 0,
-        sellingPrice: body.sellingPrice || 0,
-        customerDownPayment: body.customerDownPayment || 0,
+        costPrice,
+        costBonus,
+        downPaymentForPurchase: toNumber(body.downPaymentForPurchase, 0),
+        sellingPrice,
+        customerDownPayment,
         downPaymentInstallment: body.downPaymentInstallment || false,
-        downPaymentMonths: body.downPaymentMonths,
-        downPaymentMonthly: body.downPaymentMonthly,
-        installmentMonths: body.installmentMonths || 0,
-        monthlyPayment: body.monthlyPayment || 0,
-        paymentDueDate: body.paymentDueDate || 1,
-        remainingInstallment: body.remainingInstallment || 0,
+        downPaymentMonths: body.downPaymentMonths != null ? toInt(body.downPaymentMonths) : undefined,
+        downPaymentMonthly: body.downPaymentMonthly != null ? toNumber(body.downPaymentMonthly) : undefined,
+        installmentMonths: toInt(body.installmentMonths, 0),
+        monthlyPayment: toNumber(body.monthlyPayment, 0),
+        paymentDueDate: toInt(body.paymentDueDate, 1) || 1,
+        remainingInstallment,
         totalProfit: totalProfit,
-        currentProfit: body.customerDownPayment || 0,
-        status: 'active',
+        currentProfit,
+        status,
+        completedAt,
         installments: {
-          create: body.installments?.map((inst: any) => ({
+          create: installments.map((inst: any) => ({
             installmentNumber: inst.installmentNumber,
-            dueDate: new Date(inst.dueDate),
+            dueDate: inst.dueDate,
             amount: inst.amount,
-            paid: inst.paid || false
-          })) || []
+            paid: inst.paid,
+            paidDate: inst.paidDate
+          }))
         },
         creditCards: {
           create: body.creditCards?.map((card: any) => ({
             creditCardId: card.creditCardId,
-            amount: card.amount,
-            installments: card.installments,
-            monthlyPayment: card.monthlyPayment,
-            remainingAmount: card.remainingAmount,
+            amount: toNumber(card.amount, 0),
+            installments: toInt(card.installments, 0),
+            monthlyPayment: toNumber(card.monthlyPayment, 0),
+            remainingAmount: toNumber(card.remainingAmount, 0),
             payments: {
               create: card.payments?.map((payment: any) => ({
-                installmentNumber: payment.installmentNumber,
+                installmentNumber: toInt(payment.installmentNumber, 0),
                 dueDate: new Date(payment.dueDate),
-                amount: payment.amount,
-                paid: payment.paid || false
+                amount: toNumber(payment.amount, 0),
+                paid: !!payment.paid,
+                paidDate: payment.paidDate && isValidDateString(payment.paidDate) ? new Date(payment.paidDate) : undefined
               })) || []
             }
           })) || []
