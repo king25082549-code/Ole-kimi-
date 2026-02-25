@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
@@ -13,6 +14,14 @@ export async function GET() {
             payments: true
           }
         }
+      }
+    })
+
+    // ดึงบัตรเครดิตพร้อมการจ่ายจริง (CreditCardPayment)
+    const creditCards = await prisma.creditCard.findMany({
+      include: {
+        usages: true,
+        payments: true
       }
     })
     
@@ -46,9 +55,11 @@ export async function GET() {
       return sum + (totalPaid - totalCost)
     }, 0)
     
-    // ยอดผ่อนบัตรเครดิตค้างชำระ
-    const creditCardRemaining = customers.reduce((sum, c) => {
-      return sum + c.creditCards.reduce((cardSum, card) => cardSum + card.remainingAmount, 0)
+    // ยอดผ่อนบัตรเครดิตค้างชำระ (คำนวณจาก CreditCardPayment จริง)
+    const creditCardRemaining = creditCards.reduce((sum: number, card: any) => {
+      const totalUsed = card.usages.reduce((s: number, u: any) => s + u.amount, 0)
+      const totalPaid = card.payments.reduce((s: number, p: any) => s + p.amount, 0)
+      return sum + Math.max(0, totalUsed - totalPaid)
     }, 0)
     
     // ลูกค้าที่จะถึงนัดชำระ (7 วัน) - รวมทั้ง active และ overdue ที่ยังมีงวดที่ต้องจ่าย
