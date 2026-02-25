@@ -4,7 +4,7 @@ import { TrendingUp, TrendingDown, Wallet, AlertCircle, Users, CheckCircle, Cloc
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { DashboardSummary, Customer } from '@/types'
+import type { DashboardSummary } from '@/types'
 
 interface DashboardProps {
   summary: DashboardSummary | null

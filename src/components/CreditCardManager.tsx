@@ -295,8 +295,8 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                         <span className="text-gray-600">ผ่อนให้ลูกค้า:</span>
                       </div>
                     )}
-                    {card.usages && card.usages.slice(0, 2).map((usage, idx) => (
-                      <div key={idx} className="text-xs text-gray-500 pl-6">
+                    {card.usages && card.usages.slice(0, 2).map((usage) => (
+                      <div key={usage.id} className="text-xs text-gray-500 pl-6">
                         • {usage.customer?.name} ({usage.customer?.productModel})
                       </div>
                     ))}
@@ -458,7 +458,7 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                     <p className="text-gray-500 text-center py-4">ยังไม่มีประวัติการใช้งาน</p>
                   ) : (
                     <div className="space-y-2">
-                      {viewCard.usages.map((usage, idx) => (
+                      {viewCard.usages.map((usage, _idx) => (
                         <div key={usage.id} className="p-3 bg-gray-50 rounded-lg">
                           <div className="flex justify-between items-center">
                             <div>

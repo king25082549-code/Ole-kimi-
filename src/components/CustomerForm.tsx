@@ -66,6 +66,7 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
   const [installments, setInstallments] = useState<ProductInstallment[]>([])
 
   // โหลดข้อมูลเมื่อแก้ไข
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (editingCustomer) {
       setName(editingCustomer.name)
@@ -104,6 +105,7 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
   }
 
   // อัพเดทบัตรเครดิต
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateCardUsage = (index: number, field: keyof CreditCardUsage, value: any) => {
     const newUsages = [...cardUsages]
     newUsages[index] = { ...newUsages[index], [field]: value }
@@ -401,7 +403,7 @@ export function CustomerForm({ creditCards, onSave, onCancel, editingCustomer }:
             </CardHeader>
             <CardContent className="p-4 pt-0 space-y-3">
               {cardUsages.length === 0 ? (
-                <p className="text-gray-500 text-center py-4 text-sm">ยังไม่มีบัตรเครดิต กด "เพิ่มบัตร" เพื่อเพิ่ม</p>
+                <p className="text-gray-500 text-center py-4 text-sm">ยังไม่มีบัตรเครดิต กด &ldquo;เพิ่มบัตร&rdquo; เพื่อเพิ่ม</p>
               ) : (
                 cardUsages.map((usage, index) => (
                   <div key={usage.id} className="p-3 border rounded-lg space-y-3">

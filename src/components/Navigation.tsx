@@ -10,6 +10,15 @@ interface NavigationProps {
   onTabChange: (tab: string) => void
 }
 
+interface SidebarContentProps {
+  isMobile?: boolean
+  isCollapsed: boolean
+  activeTab: string
+  onTabClick: (tabId: string) => void
+  onCollapse: () => void
+  onCloseMobile: () => void
+}
+
 const menuItems = [
   { id: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
   { id: 'customers', label: 'ลูกค้าซื้อผ่อน', icon: Users },
@@ -17,17 +26,8 @@ const menuItems = [
   { id: 'completed', label: 'ปิดการขายแล้ว', icon: CheckCircle },
 ]
 
-export function Navigation({ activeTab, onTabChange }: NavigationProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  const handleTabClick = (tabId: string) => {
-    onTabChange(tabId)
-    setMobileOpen(false)
-  }
-
-  // Sidebar content
-  const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
+function SidebarContent({ isMobile = false, isCollapsed, activeTab, onTabClick, onCollapse, onCloseMobile }: SidebarContentProps) {
+  return (
     <div className={`flex flex-col h-full ${isCollapsed && !isMobile ? 'w-16' : 'w-full'} transition-all duration-300`}>
       {/* Logo */}
       <div className={`flex items-center ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'} p-4 border-b`}>
@@ -44,7 +44,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
         </div>
         {!isMobile && (
           <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={onCollapse}
             className="p-1 hover:bg-gray-100 rounded-lg transition-colors hidden lg:block"
           >
             {isCollapsed ? (
@@ -55,7 +55,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
           </button>
         )}
         {isMobile && (
-          <button onClick={() => setMobileOpen(false)} className="lg:hidden">
+          <button onClick={onCloseMobile} className="lg:hidden">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         )}
@@ -70,7 +70,7 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
           return (
             <button
               key={item.id}
-              onClick={() => handleTabClick(item.id)}
+              onClick={() => onTabClick(item.id)}
               className={`w-full flex items-center ${isCollapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-3 rounded-xl transition-all duration-200 group relative ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
@@ -102,6 +102,16 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
       )}
     </div>
   )
+}
+
+export function Navigation({ activeTab, onTabChange }: NavigationProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  const handleTabClick = (tabId: string) => {
+    onTabChange(tabId)
+    setMobileOpen(false)
+  }
 
   return (
     <>
@@ -122,14 +132,27 @@ export function Navigation({ activeTab, onTabChange }: NavigationProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-72">
-            <SidebarContent isMobile />
+            <SidebarContent
+              isMobile
+              isCollapsed={isCollapsed}
+              activeTab={activeTab}
+              onTabClick={handleTabClick}
+              onCollapse={() => setIsCollapsed(!isCollapsed)}
+              onCloseMobile={() => setMobileOpen(false)}
+            />
           </SheetContent>
         </Sheet>
       </header>
 
       {/* Desktop Sidebar */}
       <aside className={`hidden lg:block fixed left-0 top-0 h-screen bg-white shadow-lg z-40 transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-64'}`}>
-        <SidebarContent />
+        <SidebarContent
+          isCollapsed={isCollapsed}
+          activeTab={activeTab}
+          onTabClick={handleTabClick}
+          onCollapse={() => setIsCollapsed(!isCollapsed)}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
       </aside>
 
       {/* Spacer for mobile */}
