@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { CreditCard } from '@/types'
 
@@ -341,6 +342,9 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
       {/* Dialog แก้ไข */}
       <Dialog open={!!editingCard} onOpenChange={() => setEditingCard(null)}>
         <DialogContent>
+          <VisuallyHidden>
+            <DialogTitle>แก้ไขบัตรเครดิต</DialogTitle>
+          </VisuallyHidden>
           <DialogHeader>
             <DialogTitle>แก้ไขบัตรเครดิต</DialogTitle>
           </DialogHeader>
