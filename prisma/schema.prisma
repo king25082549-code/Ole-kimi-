@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// บัตรเครดิต
+model CreditCard {
+  id        String   @id @default(uuid())
+  name      String
+  limit     Float    @default(0)
+  dueDate   Int      // วันที่ครบกำหนดชำระของทุกเดือน (1-31)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ความสัมพันธ์
+  usages CreditCardUsage[]
+
+  @@map("credit_cards")
+}
+
+// การใช้บัตรเครดิต (รูดบัตรซื้อสินค้า)
+model CreditCardUsage {
+  id             String  @id @default(uuid())
+  creditCardId   String
+  customerId     String
+  amount         Float   // ยอดรูดบัตร
+  installments   Int     // จำนวนงวดผ่อนบัตร
+  monthlyPayment Float   // ยอดผ่อนต่อเดือน
+  remainingAmount Float  // ยอดค้างชำระบัตร
+
+  // ความสัมพันธ์
+  creditCard CreditCard @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  payments   CardPayment[]
+
+  @@map("credit_card_usages")
+}
+
+// การชำระบัตรเครดิตแต่ละงวด
+model CardPayment {
+  id                String          @id @default(uuid())
+  creditCardUsageId String
+  installmentNumber Int
+  dueDate           DateTime
+  amount            Float
+  paid              Boolean         @default(false)
+  paidDate          DateTime?
+
+  // ความสัมพันธ์
+  creditCardUsage CreditCardUsage @relation(fields: [creditCardUsageId], references: [id], onDelete: Cascade)
+
+  @@map("card_payments")
+}
+
+// ลูกค้าซื้อผ่อน
+model Customer {
+  id                      String   @id @default(uuid())
+  name                    String
+  phone                   String
+  address                 String?
+  
+  // ข้อมูลสินค้า
+  productType             String   // iPad, iPhone, MacBook, Notebook, อื่นๆ
+  productTypeOther        String?  // กรณีเลือกอื่นๆ
+  productModel            String
+  serialNumber            String?
+  
+  // ต้นทุน
+  costPrice               Float    @default(0) // ต้นทุนซื้อสินค้า
+  costBonus               Float    @default(0) // ต้นทุนของแถม
+  downPaymentForPurchase  Float    @default(0) // วางดาวน์ตอนซื้อสินค้า
+  
+  // ราคาขาย
+  sellingPrice            Float    @default(0)
+  customerDownPayment     Float    @default(0)
+  downPaymentInstallment  Boolean  @default(false) // ผ่อนดาวน์หรือไม่
+  downPaymentMonths       Int?     // จำนวนเดือนผ่อนดาวน์
+  downPaymentMonthly      Float?   // ยอดผ่อนดาวน์ต่อเดือน
+  
+  // การผ่อน
+  installmentMonths       Int      @default(0)
+  monthlyPayment          Float    @default(0)
+  paymentDueDate          Int      @default(1) // วันที่นัดชำระของทุกเดือน
+  remainingInstallment    Float    @default(0) // ยอดค้างชำระ
+  
+  // สถานะ
+  status                  String   @default("active") // active, completed, overdue
+  
+  // กำไร
+  totalProfit             Float    @default(0) // กำไรที่จะได้ทั้งหมด (sellingPrice - costPrice - costBonus)
+  currentProfit           Float    @default(0) // กำไรปัจจุบัน (ตามเงินที่เก็บได้แล้ว)
+  
+  // เวลา
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  completedAt             DateTime?
+
+  // ความสัมพันธ์
+  creditCards CreditCardUsage[]
+  installments ProductInstallment[]
+
+  @@map("customers")
+}
+
+// งวดผ่อนสินค้า
+model ProductInstallment {
+  id                String    @id @default(uuid())
+  customerId        String
+  installmentNumber Int
+  dueDate           DateTime
+  amount            Float
+  paid              Boolean   @default(false)
+  paidDate          DateTime?
+
+  // ความสัมพันธ์
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("product_installments")
+}
