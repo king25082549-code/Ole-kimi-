@@ -137,31 +137,30 @@ export function Dashboard({ summary, onViewCustomer, loading }: DashboardProps) 
       </div>
 
       {/* สถิติลูกค้า */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">
+      <div className="grid grid-cols-3 gap-3 lg:gap-4">
         {customerStats.map((stat, index) => {
           const Icon = stat.icon
           return (
             <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardContent className="p-3 lg:p-6">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                  <div className="text-center lg:text-left">
-                    <p className="text-xs lg:text-sm font-medium text-gray-500">{stat.title}</p>
-                    <p className={`text-xl lg:text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
-                    {/* เพิ่มคำอธิบาย */}
-                    {stat.title === 'กำไรขาดทุนปัจจุบัน' && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        ยอดที่ลูกค้าจ่ายมาแล้ว - ต้นทุนทั้งหมด
-                      </p>
-                    )}
-                    {stat.title === 'กำไรขาดทุนทั้งหมด' && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        ราคาขายทั้งหมด - ต้นทุนทั้งหมด
-                      </p>
-                    )}
+              <CardContent className="p-3 lg:p-5">
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="bg-gray-100 p-1.5 lg:p-2 rounded-full">
+                      <Icon className={`w-4 h-4 lg:w-5 lg:h-5 ${stat.color}`} />
+                    </div>
                   </div>
-                  <div className="hidden lg:block bg-gray-100 p-3 rounded-full">
-                    <Icon className={`w-6 h-6 ${stat.color}`} />
-                  </div>
+                  <p className="text-xs font-medium text-gray-500 leading-tight">{stat.title}</p>
+                  <p className={`text-base lg:text-xl font-bold mt-0.5 leading-tight ${stat.color}`}>{stat.value}</p>
+                  {stat.title === 'กำไรขาดทุนปัจจุบัน' && (
+                    <p className="text-xs text-gray-400 mt-0.5 hidden sm:block">
+                      จ่ายแล้ว - ต้นทุน
+                    </p>
+                  )}
+                  {stat.title === 'กำไรขาดทุนทั้งหมด' && (
+                    <p className="text-xs text-gray-400 mt-0.5 hidden sm:block">
+                      ราคาขาย - ต้นทุน
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -199,14 +198,14 @@ export function Dashboard({ summary, onViewCustomer, loading }: DashboardProps) 
 
       {/* อธิบายการคำนวณกำไร */}
       <Card className="bg-gray-50">
-        <CardHeader className="p-4 lg:p-6">
-          <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
-            <HelpCircle className="w-4 h-4 lg:w-5 lg:h-5 text-gray-500" />
+        <CardHeader className="p-3 lg:p-6">
+          <CardTitle className="flex items-center gap-2 text-sm lg:text-lg">
+            <HelpCircle className="w-4 h-4 text-gray-500" />
             อธิบายการคำนวณกำไร
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
+        <CardContent className="p-3 lg:p-6 pt-0 lg:pt-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 text-xs lg:text-sm">
             <div className="space-y-2">
               <h4 className="font-semibold text-gray-700">📊 กำไรขาดทุนปัจจุบัน ({formatCurrency(summary.currentProfit)})</h4>
               <p className="text-gray-600">คำนวณจาก: ยอดที่ลูกค้าจ่ายมาแล้วทั้งหมด - ต้นทุนทั้งหมด</p>

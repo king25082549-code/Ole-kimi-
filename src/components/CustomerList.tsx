@@ -93,8 +93,8 @@ export function CustomerList({ customers, onAddNew, onEdit, onDelete, onComplete
 
       {/* ตัวกรองสถานะและค้นหา */}
       <div className="space-y-3">
-        {/* ตัวกรองสถานะ */}
-        <div className="flex flex-wrap gap-2">
+        {/* ตัวกรองสถานะ - scroll แนวนอนบนมือถือ */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-0">
           <Button
             variant={statusFilter === 'all' ? 'default' : 'outline'}
             size="sm"
@@ -146,7 +146,7 @@ export function CustomerList({ customers, onAddNew, onEdit, onDelete, onComplete
           <p className="text-gray-500 mt-1">{searchTerm ? 'ลองค้นหาด้วยคำอื่น' : 'ยังไม่มีลูกค้า กด "เพิ่มลูกค้าใหม่" เพื่อเริ่มต้น'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
           {filteredCustomers.map((customer) => {
             const nextPayment = customer.installments?.find(i => !i.paid)
             const daysUntil = nextPayment ? getDaysUntilDue(nextPayment.dueDate) : null
