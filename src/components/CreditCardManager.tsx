@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { CreditCard } from '@/types'
+import type { CreditCard, CreditCardPayment } from '@/types'
 
 interface CreditCardManagerProps {
   creditCards: CreditCard[]
@@ -37,16 +37,64 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
   const [isAdding, setIsAdding] = useState(false)
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null)
   const [viewCard, setViewCard] = useState<CreditCard | null>(null)
+  const [paymentCard, setPaymentCard] = useState<CreditCard | null>(null)
   
   // Form states
   const [name, setName] = useState('')
   const [limit, setLimit] = useState('')
   const [dueDate, setDueDate] = useState('')
+  
+  // Payment form states
+  const [paymentDate, setPaymentDate] = useState('')
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [payments, setPayments] = useState<CreditCardPayment[]>([])
 
   const resetForm = () => {
     setName('')
     setLimit('')
     setDueDate('')
+  }
+
+  const resetPaymentForm = () => {
+    setPaymentDate('')
+    setPaymentAmount('')
+  }
+
+  const handlePayment = () => {
+    if (!paymentCard || !paymentDate || !paymentAmount) return
+    
+    const amount = parseFloat(paymentAmount)
+    const currentTotalUsed = paymentCard.totalUsed || 0
+    const newTotalPaid = (payments.filter(p => p.creditCardId === paymentCard.id).reduce((sum, p) => sum + p.amount, 0)) + amount
+    const remainingBalance = currentTotalUsed - newTotalPaid
+    
+    const newPayment: CreditCardPayment = {
+      id: generateId(),
+      creditCardId: paymentCard.id,
+      paymentDate,
+      amount,
+      remainingBalance: Math.max(0, remainingBalance),
+      createdAt: new Date().toISOString()
+    }
+    
+    setPayments([...payments, newPayment])
+    resetPaymentForm()
+    setPaymentCard(null)
+  }
+
+  const getCardPayments = (cardId: string) => {
+    return payments.filter(p => p.creditCardId === cardId)
+  }
+
+  const getTotalPaid = (cardId: string) => {
+    return payments.filter(p => p.creditCardId === cardId).reduce((sum, p) => sum + p.amount, 0)
+  }
+
+  const getRemainingBalance = (cardId: string) => {
+    const card = creditCards.find(c => c.id === cardId)
+    if (!card) return 0
+    const totalPaid = getTotalPaid(cardId)
+    return Math.max(0, (card.totalUsed || 0) - totalPaid)
   }
 
   const handleSubmit = () => {
@@ -281,6 +329,14 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                       <span className="font-medium text-orange-600">{formatCurrency(card.availableBalance || 0)}</span>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span className="text-gray-600">จ่ายไปแล้ว:</span>
+                      <span className="font-medium text-green-600">{formatCurrency(getTotalPaid(card.id))}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">คงเหลือจ่าย:</span>
+                      <span className="font-medium text-red-600">{formatCurrency(getRemainingBalance(card.id))}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-gray-600">สัดส่วนการใช้:</span>
                       <span className={`font-medium ${(card.utilizationRate || 0) > 80 ? 'text-red-600' : (card.utilizationRate || 0) > 50 ? 'text-orange-600' : 'text-green-600'}`}>
                         {(card.utilizationRate || 0).toFixed(1)}%
@@ -316,6 +372,14 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                       onClick={() => setViewCard(card)}
                     >
                       ดู
+                    </Button>
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={() => setPaymentCard(card)}
+                      disabled={getRemainingBalance(card.id) <= 0}
+                    >
+                      จ่าย
                     </Button>
                     <Button 
                       variant="outline" 
@@ -382,6 +446,75 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                 <Button onClick={handleUpdate}>
                   <Save className="w-4 h-4 mr-2" />
                   บันทึก
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog จ่ายบัตรเครดิต */}
+      <Dialog open={!!paymentCard} onOpenChange={() => { setPaymentCard(null); resetPaymentForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>จ่ายค่าบัตรเครดิต: {paymentCard?.name}</DialogTitle>
+          </DialogHeader>
+          {paymentCard && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">ยอดใช้รวม</p>
+                    <p className="font-medium text-blue-600">{formatCurrency(paymentCard.totalUsed || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">จ่ายไปแล้ว</p>
+                    <p className="font-medium text-green-600">{formatCurrency(getTotalPaid(paymentCard.id))}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">คงเหลือจ่าย</p>
+                    <p className="font-medium text-red-600">{formatCurrency(getRemainingBalance(paymentCard.id))}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">วงเงินคงเหลือ</p>
+                    <p className="font-medium text-orange-600">{formatCurrency(paymentCard.availableBalance || 0)}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>วันที่จ่าย <span className="text-red-500">*</span></Label>
+                <Input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  placeholder="เลือกวันที่จ่าย"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>จำนวนเงินที่จ่าย (บาท) <span className="text-red-500">*</span></Label>
+                <Input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="จำนวนเงินที่จ่าย"
+                  max={getRemainingBalance(paymentCard.id)}
+                />
+                <p className="text-xs text-gray-500">
+                  สูงสุด: {formatCurrency(getRemainingBalance(paymentCard.id))}
+                </p>
+              </div>
+              
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => { setPaymentCard(null); resetPaymentForm(); }}>
+                  ยกเลิก
+                </Button>
+                <Button 
+                  onClick={handlePayment} 
+                  disabled={!paymentDate || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                >
+                  บันทึกการจ่าย
                 </Button>
               </div>
             </div>
@@ -477,6 +610,34 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                             <p className="text-gray-600">ยอดรูด: {formatCurrency(usage.amount)}</p>
                             <p className="text-gray-600">ผ่อน {usage.installments} เดือน งวดละ {formatCurrency(usage.monthlyPayment)}</p>
                             <p className="text-orange-600">ค้างชำระ: {formatCurrency(usage.remainingAmount)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* ประวัติการจ่ายบัตรเครดิต */}
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <CreditCardIcon className="w-4 h-4" />
+                    ประวัติการจ่าย ({getCardPayments(viewCard.id).length} รายการ)
+                  </h4>
+                  {getCardPayments(viewCard.id).length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">ยังไม่มีประวัติการจ่าย</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {getCardPayments(viewCard.id).map((payment) => (
+                        <div key={payment.id} className="p-3 bg-green-50 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <span className="font-medium text-green-800">จ่ายเมื่อ: {payment.paymentDate}</span>
+                              <p className="text-sm text-gray-600">ยอดที่จ่าย: {formatCurrency(payment.amount)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">คงเหลือ:</p>
+                              <p className="font-medium text-green-600">{formatCurrency(payment.remainingBalance)}</p>
+                            </div>
                           </div>
                         </div>
                       ))}

@@ -41,6 +41,16 @@ export interface CardPayment {
   paidDate?: string;
 }
 
+// การจ่ายค่าบัตรเครดิต (สำหรับบันทึกการจ่ายจริง)
+export interface CreditCardPayment {
+  id: string;
+  creditCardId: string;
+  paymentDate: string;
+  amount: number;
+  remainingBalance: number;
+  createdAt: string;
+}
+
 // งวดผ่อนสินค้า
 export interface ProductInstallment {
   id: string;
