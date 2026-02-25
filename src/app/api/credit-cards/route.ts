@@ -29,6 +29,9 @@ export async function GET() {
               orderBy: { installmentNumber: 'asc' }
             }
           }
+        },
+        payments: {
+          orderBy: { paymentDate: 'desc' }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -36,16 +39,22 @@ export async function GET() {
     
     // คำนวณข้อมูลสรุปสำหรับแต่ละบัตร
     const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
     const creditCardsWithSummary = creditCards.map((card: any) => {
       const totalUsed = card.usages.reduce((sum: number, usage: any) => sum + usage.amount, 0)
       const totalRemaining = card.usages.reduce((sum: number, usage: any) => sum + usage.remainingAmount, 0)
-      const availableBalance = card.limit - totalUsed
 
-      const allPayments: PaymentRow[] = (card.usages ?? [])
+      // คำนวณยอดจ่ายบัตรจริง (จาก CreditCardPayment)
+      const totalCardPaid = (card.payments ?? []).reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+      // วงเงินที่ใช้ไปสุทธิ = ยอดใช้รวม - ยอดที่จ่ายบัตรคืนแล้ว
+      const netUsed = Math.max(0, totalUsed - totalCardPaid)
+      // วงเงินคงเหลือ = limit - netUsed
+      const availableBalance = card.limit - netUsed
+      // ยอดคงเหลือที่ต้องจ่ายบัตร
+      const cardDebt = Math.max(0, totalUsed - totalCardPaid)
+
+      const allInstallmentPayments: PaymentRow[] = (card.usages ?? [])
         .flatMap((u: any) => (u?.payments ?? []))
         .map((p: any) => ({
           id: String(p.id),
@@ -54,11 +63,7 @@ export async function GET() {
           paid: !!p.paid
         }))
 
-      const unpaidPayments = allPayments.filter(p => !p.paid)
-
-      const monthlyDueThisMonth = unpaidPayments
-        .filter(p => p.dueDate.getTime() >= monthStart.getTime() && p.dueDate.getTime() < nextMonthStart.getTime())
-        .reduce((sum: number, p) => sum + p.amount, 0)
+      const unpaidPayments = allInstallmentPayments.filter(p => !p.paid)
 
       const dueWithin7Days = unpaidPayments
         .filter(p => p.dueDate.getTime() >= now.getTime() && p.dueDate.getTime() <= in7Days.getTime())
@@ -69,9 +74,10 @@ export async function GET() {
         totalUsed,
         totalRemaining,
         availableBalance,
-        monthlyDueThisMonth,
+        cardDebt,
+        totalCardPaid,
         dueWithin7Days,
-        utilizationRate: card.limit > 0 ? (totalUsed / card.limit) * 100 : 0
+        utilizationRate: card.limit > 0 ? (netUsed / card.limit) * 100 : 0
       }
     })
     

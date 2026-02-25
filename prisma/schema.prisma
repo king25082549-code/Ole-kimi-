@@ -17,9 +17,25 @@ model CreditCard {
   updatedAt DateTime @updatedAt
 
   // ความสัมพันธ์
-  usages CreditCardUsage[]
+  usages   CreditCardUsage[]
+  payments CreditCardPayment[]
 
   @@map("credit_cards")
+}
+
+// การจ่ายค่าบัตรเครดิต (บันทึกการจ่ายจริงแต่ละครั้ง)
+model CreditCardPayment {
+  id               String   @id @default(uuid())
+  creditCardId     String
+  paymentDate      DateTime
+  amount           Float    // จำนวนเงินที่จ่าย
+  remainingBalance Float    // ยอดคงเหลือหลังจ่าย
+  createdAt        DateTime @default(now())
+
+  // ความสัมพันธ์
+  creditCard CreditCard @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+
+  @@map("credit_card_payments")
 }
 
 // การใช้บัตรเครดิต (รูดบัตรซื้อสินค้า)

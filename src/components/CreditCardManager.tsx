@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Edit, Save, X, CreditCard as CreditCardIcon, AlertCircle, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ interface CreditCardManagerProps {
   onAdd: (card: Partial<CreditCard>) => void
   onUpdate: (id: string, updates: Partial<CreditCard>) => void
   onDelete: (id: string) => void
+  onRefresh?: () => void
   loading?: boolean
 }
 
@@ -33,11 +34,12 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15)
 }
 
-export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, loading }: CreditCardManagerProps) {
+export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, onRefresh, loading }: CreditCardManagerProps) {
   const [isAdding, setIsAdding] = useState(false)
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null)
   const [viewCard, setViewCard] = useState<CreditCard | null>(null)
   const [paymentCard, setPaymentCard] = useState<CreditCard | null>(null)
+  const [savingPayment, setSavingPayment] = useState(false)
   
   // Form states
   const [name, setName] = useState('')
@@ -47,7 +49,8 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
   // Payment form states
   const [paymentDate, setPaymentDate] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
-  const [payments, setPayments] = useState<CreditCardPayment[]>([])
+  // cardPaymentsMap: { [cardId]: CreditCardPayment[] } เก็บ cache ของการจ่าย
+  const [cardPaymentsMap, setCardPaymentsMap] = useState<Record<string, CreditCardPayment[]>>({})
 
   const resetForm = () => {
     setName('')
@@ -60,34 +63,50 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
     setPaymentAmount('')
   }
 
-  const handlePayment = () => {
-    if (!paymentCard || !paymentDate || !paymentAmount) return
-    
-    const amount = parseFloat(paymentAmount)
-    const currentTotalUsed = paymentCard.totalUsed || 0
-    const newTotalPaid = (payments.filter(p => p.creditCardId === paymentCard.id).reduce((sum, p) => sum + p.amount, 0)) + amount
-    const remainingBalance = currentTotalUsed - newTotalPaid
-    
-    const newPayment: CreditCardPayment = {
-      id: generateId(),
-      creditCardId: paymentCard.id,
-      paymentDate,
-      amount,
-      remainingBalance: Math.max(0, remainingBalance),
-      createdAt: new Date().toISOString()
+  const fetchCardPayments = useCallback(async (cardId: string) => {
+    try {
+      const res = await fetch(`/api/credit-cards/${cardId}/pay`)
+      if (res.ok) {
+        const data = await res.json()
+        setCardPaymentsMap(prev => ({ ...prev, [cardId]: data }))
+      }
+    } catch (e) {
+      console.error('fetch payments error', e)
     }
-    
-    setPayments([...payments, newPayment])
-    resetPaymentForm()
-    setPaymentCard(null)
+  }, [])
+
+  useEffect(() => {
+    creditCards.forEach(card => fetchCardPayments(card.id))
+  }, [creditCards, fetchCardPayments])
+
+  const handlePayment = async () => {
+    if (!paymentCard || !paymentDate || !paymentAmount) return
+    setSavingPayment(true)
+    try {
+      const res = await fetch(`/api/credit-cards/${paymentCard.id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentDate, amount: parseFloat(paymentAmount) })
+      })
+      if (res.ok) {
+        await fetchCardPayments(paymentCard.id)
+        resetPaymentForm()
+        setPaymentCard(null)
+        onRefresh?.() 
+      }
+    } catch (e) {
+      console.error('payment error', e)
+    } finally {
+      setSavingPayment(false)
+    }
   }
 
-  const getCardPayments = (cardId: string) => {
-    return payments.filter(p => p.creditCardId === cardId)
+  const getCardPayments = (cardId: string): CreditCardPayment[] => {
+    return cardPaymentsMap[cardId] || []
   }
 
   const getTotalPaid = (cardId: string) => {
-    return payments.filter(p => p.creditCardId === cardId).reduce((sum, p) => sum + p.amount, 0)
+    return getCardPayments(cardId).reduce((sum, p) => sum + p.amount, 0)
   }
 
   const getRemainingBalance = (cardId: string) => {
@@ -321,20 +340,16 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                       <span className="font-medium text-blue-600">{formatCurrency(card.totalUsed || 0)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">ต้องจ่ายเดือนนี้:</span>
-                      <span className="font-medium text-purple-600">{formatCurrency(card.monthlyDueThisMonth || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">ยอดคงเหลือ:</span>
+                      <span className="text-gray-600">วงเงินคงเหลือ:</span>
                       <span className="font-medium text-orange-600">{formatCurrency(card.availableBalance || 0)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">จ่ายไปแล้ว:</span>
-                      <span className="font-medium text-green-600">{formatCurrency(getTotalPaid(card.id))}</span>
+                      <span className="text-gray-600">จ่ายบัตรไปแล้ว:</span>
+                      <span className="font-medium text-green-600">{formatCurrency((card as any).totalCardPaid || getTotalPaid(card.id))}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">คงเหลือจ่าย:</span>
-                      <span className="font-medium text-red-600">{formatCurrency(getRemainingBalance(card.id))}</span>
+                      <span className="text-gray-600">คงเหลือจ่ายบัตร:</span>
+                      <span className="font-medium text-red-600">{formatCurrency((card as any).cardDebt ?? getRemainingBalance(card.id))}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">สัดส่วนการใช้:</span>
@@ -377,7 +392,6 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                       variant="default" 
                       size="sm"
                       onClick={() => setPaymentCard(card)}
-                      disabled={getRemainingBalance(card.id) <= 0}
                     >
                       จ่าย
                     </Button>
@@ -468,12 +482,12 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                     <p className="font-medium text-blue-600">{formatCurrency(paymentCard.totalUsed || 0)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">จ่ายไปแล้ว</p>
-                    <p className="font-medium text-green-600">{formatCurrency(getTotalPaid(paymentCard.id))}</p>
+                    <p className="text-gray-500">จ่ายบัตรไปแล้ว</p>
+                    <p className="font-medium text-green-600">{formatCurrency((paymentCard as any).totalCardPaid || getTotalPaid(paymentCard.id))}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">คงเหลือจ่าย</p>
-                    <p className="font-medium text-red-600">{formatCurrency(getRemainingBalance(paymentCard.id))}</p>
+                    <p className="text-gray-500">คงเหลือจ่ายบัตร</p>
+                    <p className="font-medium text-red-600">{formatCurrency((paymentCard as any).cardDebt ?? getRemainingBalance(paymentCard.id))}</p>
                   </div>
                   <div>
                     <p className="text-gray-500">วงเงินคงเหลือ</p>
@@ -512,9 +526,9 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                 </Button>
                 <Button 
                   onClick={handlePayment} 
-                  disabled={!paymentDate || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                  disabled={!paymentDate || !paymentAmount || parseFloat(paymentAmount) <= 0 || savingPayment}
                 >
-                  บันทึกการจ่าย
+                  {savingPayment ? 'กำลังบันทึก...' : 'บันทึกการจ่าย'}
                 </Button>
               </div>
             </div>
@@ -631,12 +645,12 @@ export function CreditCardManager({ creditCards, onAdd, onUpdate, onDelete, load
                         <div key={payment.id} className="p-3 bg-green-50 rounded-lg">
                           <div className="flex justify-between items-center">
                             <div>
-                              <span className="font-medium text-green-800">จ่ายเมื่อ: {payment.paymentDate}</span>
+                              <span className="font-medium text-green-800">จ่ายเมื่อ: {new Date(payment.paymentDate).toLocaleDateString('th-TH')}</span>
                               <p className="text-sm text-gray-600">ยอดที่จ่าย: {formatCurrency(payment.amount)}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm text-gray-500">คงเหลือ:</p>
-                              <p className="font-medium text-green-600">{formatCurrency(payment.remainingBalance)}</p>
+                              <p className="text-sm text-gray-500">คงเหลือจ่าย:</p>
+                              <p className="font-medium text-red-600">{formatCurrency(payment.remainingBalance)}</p>
                             </div>
                           </div>
                         </div>
